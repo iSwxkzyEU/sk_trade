@@ -2,7 +2,7 @@
 // Logique de Trade entre joueurs
 // ============================================
 
-// Remplit le select des villages source pour le trade
+// Remplit le select des villages source pour le trade (mes villages)
 async function populateTradeVillages() {
   const select = document.getElementById('trade-village-select');
   if (!select) return;
@@ -24,9 +24,34 @@ async function populateTradeVillages() {
   }
 }
 
+// Remplit le select des villages destination (villages de l'autre joueur)
+async function populateTradeDestVillages() {
+  const select = document.getElementById('trade-dest-village-select');
+  if (!select) return;
+
+  const otherPlayer = players.find(p => p.id !== currentPlayerId);
+  if (!otherPlayer) return;
+
+  const { data: villages } = await db
+    .from('villages')
+    .select('*')
+    .eq('player_id', otherPlayer.id)
+    .order('id');
+
+  select.innerHTML = '';
+  if (villages) {
+    villages.forEach(v => {
+      const opt = document.createElement('option');
+      opt.value = v.id;
+      opt.textContent = v.name;
+      select.appendChild(opt);
+    });
+  }
+}
+
 // Envoie des ressources d'un joueur a un autre
-// Retire du village source, ajoute au premier village du destinataire
-async function executeTrade(fromPlayerId, toPlayerId, fromVillageId, banquetType, amount) {
+// Retire du village source, ajoute au village destination choisi
+async function executeTrade(fromPlayerId, toPlayerId, fromVillageId, toVillageId, banquetType, amount) {
   // 1. Enregistrer le trade dans l'historique
   const { error: tradeError } = await db
     .from('trades')
@@ -64,39 +89,28 @@ async function executeTrade(fromPlayerId, toPlayerId, fromVillageId, banquetType
     await snapshotStock(fromVillageId, banquetType, Math.max(0, fromCurrent - amount));
   }
 
-  // 3. Ajouter au stock du destinataire (premier village)
-  const { data: toVillages } = await db
-    .from('villages')
-    .select('id')
-    .eq('player_id', toPlayerId)
-    .order('id')
-    .limit(1);
+  // 3. Ajouter au stock du destinataire (village choisi)
+  const { data: toStock } = await db
+    .from('stocks')
+    .select('*')
+    .eq('village_id', toVillageId)
+    .eq('banquet_type', banquetType)
+    .single();
 
-  if (toVillages && toVillages.length > 0) {
-    const targetVillageId = toVillages[0].id;
-
-    const { data: toStock } = await db
-      .from('stocks')
-      .select('*')
-      .eq('village_id', targetVillageId)
+  if (toStock) {
+    const { data: toProd } = await db
+      .from('production')
+      .select('daily_amount')
+      .eq('village_id', toVillageId)
       .eq('banquet_type', banquetType)
       .single();
 
-    if (toStock) {
-      const { data: toProd } = await db
-        .from('production')
-        .select('daily_amount')
-        .eq('village_id', targetVillageId)
-        .eq('banquet_type', banquetType)
-        .single();
-
-      const toDaily = toProd ? toProd.daily_amount : 0;
-      const toMultiplier = await getActiveMultiplier(toPlayerId, banquetType);
-      const toCurrent = calculateCurrentStock(toStock, toDaily, toMultiplier);
-      await snapshotStock(targetVillageId, banquetType, toCurrent + amount);
-    } else {
-      await snapshotStock(targetVillageId, banquetType, amount);
-    }
+    const toDaily = toProd ? toProd.daily_amount : 0;
+    const toMultiplier = await getActiveMultiplier(toPlayerId, banquetType);
+    const toCurrent = calculateCurrentStock(toStock, toDaily, toMultiplier);
+    await snapshotStock(toVillageId, banquetType, toCurrent + amount);
+  } else {
+    await snapshotStock(toVillageId, banquetType, amount);
   }
 
   return true;

@@ -177,7 +177,7 @@ body {
 
 .kpi-grid {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(8, 1fr);
   gap: 10px;
 }
 
@@ -765,6 +765,35 @@ select:focus {
   padding: 12px 0;
 }
 
+/* ---- SOUS CARTE TOGGLE ---- */
+
+.sous-carte-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  margin-left: 4px;
+}
+
+.sous-carte-cb {
+  width: 13px;
+  height: 13px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.sous-carte-label {
+  color: var(--text-muted);
+  font-size: 0.6rem;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+
+.sous-carte-toggle:hover .sous-carte-label {
+  color: var(--accent);
+}
+
 /* ---- SCROLLBAR ---- */
 
 ::-webkit-scrollbar {
@@ -806,6 +835,10 @@ select:focus {
 
   .kpi-grid {
     grid-template-columns: repeat(4, 1fr);
+  }
+
+  .sous-carte-toggle {
+    flex-direction: row;
   }
 
   .banquet-row {

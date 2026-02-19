@@ -38,6 +38,7 @@ function renderPlayerTabs() {
 
 async function switchPlayer(playerId) {
   currentPlayerId = playerId;
+  cachedData = {}; // Clear cache au changement de joueur
 
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.classList.toggle('active', parseInt(btn.dataset.playerId) === playerId);
@@ -60,6 +61,7 @@ async function refreshDashboard() {
     renderCards(),
     renderTradeHistory(),
     populateTradeVillages(),
+    populateTradeDestVillages(),
     renderKPIs()
   ]);
 }
@@ -184,15 +186,22 @@ async function createVillageCard(village, capacity) {
       banquetType: type
     };
 
+    const sousCarteToggle = multiplier > 1 ? `
+          <label class="sous-carte-toggle" title="Cocher si la valeur saisie est deja multipliee par la carte">
+            <input type="checkbox" class="sous-carte-cb" onchange="toggleSousCarte(${village.id}, '${type}', ${multiplier}, this)">
+            <span class="sous-carte-label">sous carte</span>
+          </label>` : '';
+
     html += `
       <div class="banquet-row ${isNearCap ? 'near-cap' : ''}">
         <div class="banquet-type">${type}</div>
         <div class="banquet-prod">
-          <input type="number" class="input-sm" value="${dailyAmount}" min="0"
-            onblur="updateProduction(${village.id}, '${type}', this.value)" title="Production/jour">
+          <input type="number" class="input-sm prod-input" id="prod-${village.id}-${type.replace(/\s/g,'')}" value="${dailyAmount}" min="0"
+            onblur="updateProduction(${village.id}, '${type}', this.value)" title="Production/jour (base)">
           <span class="prod-label">/j</span>
           ${multiplier > 1 ? `<span class="multiplier-badge">x${multiplier}</span>` : ''}
           ${multiplier > 1 ? `<span class="effective-prod">(${effectiveDaily}/j)</span>` : ''}
+          ${sousCarteToggle}
         </div>
         <div class="banquet-stock" data-stock-key="${stockKey}">
           <div class="progress-bar">
@@ -259,6 +268,26 @@ async function updateProduction(villageId, banquetType, value) {
   setTimeout(() => { localChangeInProgress = false; }, 3000);
 }
 
+// ---- PRODUCTION SOUS CARTE ----
+// Quand l'utilisateur coche "sous carte", la valeur saisie est divisee par le multiplicateur
+// pour stocker la production de base. Quand la carte expire, la prod reste correcte.
+
+async function toggleSousCarte(villageId, banquetType, multiplier, checkbox) {
+  const inputId = `prod-${villageId}-${banquetType.replace(/\s/g,'')}`;
+  const input = document.getElementById(inputId);
+  if (!input) return;
+
+  const currentValue = parseInt(input.value) || 0;
+
+  if (checkbox.checked) {
+    // La valeur saisie est deja multipliee -> calculer la base
+    const baseValue = Math.round(currentValue / multiplier);
+    input.value = baseValue;
+    await updateProduction(villageId, banquetType, baseValue);
+  }
+  // Si decoche, on ne fait rien (la valeur dans l'input est deja la base)
+}
+
 // ---- MANUAL STOCK EDIT ----
 
 function promptManualStock(villageId, banquetType, currentValue) {
@@ -305,13 +334,13 @@ async function addVillage() {
   await initVillageProduction(data.id);
 
   input.value = '';
-  await Promise.all([renderVillages(), populateTradeVillages()]);
+  await Promise.all([renderVillages(), populateTradeVillages(), populateTradeDestVillages()]);
 }
 
 async function deleteVillage(villageId, villageName) {
   if (!confirm(`Supprimer le village "${villageName}" et toutes ses donnees ?`)) return;
   await db.from('villages').delete().eq('id', villageId);
-  await Promise.all([renderVillages(), populateTradeVillages()]);
+  await Promise.all([renderVillages(), populateTradeVillages(), populateTradeDestVillages()]);
 }
 
 // ---- CAPACITY ----
@@ -442,16 +471,17 @@ async function removeCard(cardId) {
 // ---- TRADE ----
 
 async function sendTrade() {
-  const villageId = parseInt(document.getElementById('trade-village-select').value);
+  const fromVillageId = parseInt(document.getElementById('trade-village-select').value);
+  const toVillageId = parseInt(document.getElementById('trade-dest-village-select').value);
   const type = document.getElementById('trade-type-select').value;
   const amount = parseInt(document.getElementById('trade-amount').value);
 
-  if (!villageId || !amount || amount <= 0) return;
+  if (!fromVillageId || !toVillageId || !amount || amount <= 0) return;
 
   const otherPlayer = players.find(p => p.id !== currentPlayerId);
   if (!otherPlayer) return;
 
-  const success = await executeTrade(currentPlayerId, otherPlayer.id, villageId, type, amount);
+  const success = await executeTrade(currentPlayerId, otherPlayer.id, fromVillageId, toVillageId, type, amount);
   if (success) {
     document.getElementById('trade-amount').value = '0';
     document.getElementById('trade-slider').value = '0';
