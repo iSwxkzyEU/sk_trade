@@ -51,6 +51,9 @@ async function switchPlayer(playerId) {
   document.getElementById('capacity-display').textContent = player.stock_capacity;
   document.getElementById('capacity-input').value = player.stock_capacity;
 
+  // Easter egg Warlock
+  if (player.name === 'Warlock') showBebou();
+
   await refreshDashboard(gen);
   if (gen === switchGeneration) startStockTick();
 }
@@ -621,6 +624,24 @@ function toggleSection(headerEl) {
   body.classList.toggle('collapsed');
   headerEl.classList.toggle('open');
   icon.textContent = isCollapsed ? '−' : '+';
+}
+
+// ---- BEBOU ----
+
+function showBebou() {
+  const existing = document.getElementById('bebou-popup');
+  if (existing) existing.remove();
+
+  const popup = document.createElement('div');
+  popup.id = 'bebou-popup';
+  popup.textContent = 'Bebou <3';
+  document.body.appendChild(popup);
+
+  requestAnimationFrame(() => popup.classList.add('bebou-visible'));
+  setTimeout(() => {
+    popup.classList.remove('bebou-visible');
+    setTimeout(() => popup.remove(), 400);
+  }, 5000);
 }
 
 // ---- START ----
