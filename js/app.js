@@ -641,7 +641,7 @@ function showBebou() {
   setTimeout(() => {
     popup.classList.remove('bebou-visible');
     setTimeout(() => popup.remove(), 400);
-  }, 5000);
+  }, 2000);
 }
 
 // ---- START ----
