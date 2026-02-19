@@ -7,6 +7,7 @@ let players = [];
 let cachedData = {}; // Cache local : { villageId: { productions, stocks } }
 let stockTickInterval = null;
 let localChangeInProgress = false; // Bloque les refreshes realtime pendant une modif locale
+let switchGeneration = 0; // Compteur anti-race-condition pour les switchs d'onglet
 
 // ---- INIT ----
 
@@ -39,6 +40,7 @@ function renderPlayerTabs() {
 async function switchPlayer(playerId) {
   currentPlayerId = playerId;
   cachedData = {}; // Clear cache au changement de joueur
+  const gen = ++switchGeneration; // Incrementer pour invalider les anciennes requetes
 
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.classList.toggle('active', parseInt(btn.dataset.playerId) === playerId);
@@ -49,20 +51,21 @@ async function switchPlayer(playerId) {
   document.getElementById('capacity-display').textContent = player.stock_capacity;
   document.getElementById('capacity-input').value = player.stock_capacity;
 
-  await refreshDashboard();
-  startStockTick();
+  await refreshDashboard(gen);
+  if (gen === switchGeneration) startStockTick();
 }
 
 // ---- DASHBOARD REFRESH ----
 
-async function refreshDashboard() {
+async function refreshDashboard(gen) {
+  const g = gen || switchGeneration;
   await Promise.all([
-    renderVillages(),
-    renderCards(),
+    renderVillages(g),
+    renderCards(g),
     renderTradeHistory(),
     populateTradeVillages(),
     populateTradeDestVillages(),
-    renderKPIs()
+    renderKPIs(g)
   ]);
 }
 
@@ -113,7 +116,8 @@ function tickStockDisplay() {
 
 // ---- VILLAGES ----
 
-async function renderVillages() {
+async function renderVillages(gen) {
+  const g = gen || switchGeneration;
   const player = players.find(p => p.id === currentPlayerId);
   if (!player) return;
 
@@ -122,6 +126,9 @@ async function renderVillages() {
     .select('*')
     .eq('player_id', currentPlayerId)
     .order('id');
+
+  // Abandonner si on a change d'onglet entre temps
+  if (g !== switchGeneration) return;
 
   const container = document.getElementById('villages-container');
   container.innerHTML = '';
@@ -132,6 +139,7 @@ async function renderVillages() {
   }
 
   for (const village of villages) {
+    if (g !== switchGeneration) return; // Re-check apres chaque village (async)
     const card = await createVillageCard(village, player.stock_capacity);
     container.appendChild(card);
   }
@@ -153,6 +161,7 @@ async function createVillageCard(village, capacity) {
     <div class="village-header">
       <h3>${village.name}</h3>
       <div class="village-actions">
+        <button class="btn btn-transfer btn-sm" onclick="transferVillage(${village.id})" title="Transférer vers l'autre joueur">Transférer</button>
         <button class="btn btn-danger btn-sm" onclick="banquet(${village.id})">Banquet</button>
         <button class="btn btn-ghost btn-sm" onclick="deleteVillage(${village.id}, '${village.name}')">Suppr.</button>
       </div>
@@ -364,8 +373,10 @@ async function updateCapacity() {
 
 // ---- CARDS ----
 
-async function renderCards() {
+async function renderCards(gen) {
+  const g = gen || switchGeneration;
   const activeCards = await getActiveCards(currentPlayerId);
+  if (g !== switchGeneration) return;
   const container = document.getElementById('cards-container');
   container.innerHTML = '';
 
@@ -547,7 +558,7 @@ function debouncedRefresh() {
   if (localChangeInProgress) return; // Ignorer les echos de nos propres changements
   if (realtimeDebounce) clearTimeout(realtimeDebounce);
   realtimeDebounce = setTimeout(() => {
-    if (!localChangeInProgress) renderVillages();
+    if (!localChangeInProgress) renderVillages(switchGeneration);
   }, 2000);
 }
 
@@ -559,7 +570,8 @@ setInterval(() => {
 
 // ---- KPIs ----
 
-async function renderKPIs() {
+async function renderKPIs(gen) {
+  const g = gen || switchGeneration;
   const container = document.getElementById('kpi-container');
   container.innerHTML = '';
 
@@ -568,6 +580,7 @@ async function renderKPIs() {
     .select('id')
     .eq('player_id', currentPlayerId);
 
+  if (g !== switchGeneration) return;
   if (!villages || villages.length === 0) return;
 
   const villageIds = villages.map(v => v.id);
