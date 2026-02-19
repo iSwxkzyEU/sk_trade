@@ -36,40 +36,32 @@
       </div>
     </div>
 
+    <!-- KPI -->
+    <div class="kpi-grid" id="kpi-container"></div>
+
     <!-- CARDS SECTION -->
-    <div class="section">
-      <div class="section-header">
-        <h2>Cartes actives</h2>
+    <div class="section collapsible">
+      <div class="section-header" onclick="toggleSection(this)">
+        <h2>Cartes</h2>
+        <span class="collapse-icon">+</span>
       </div>
-      <div class="cards-grid" id="cards-container"></div>
-      <div class="card-activate">
-        <select id="card-type-select">
-          <option value="Gibier">Gibier</option>
-          <option value="Tunique">Tunique</option>
-          <option value="Vaisselle">Vaisselle</option>
-          <option value="Chaise">Chaise</option>
-          <option value="Sel">Sel</option>
-          <option value="Epices">Epices</option>
-          <option value="Soie">Soie</option>
-        </select>
-        <select id="card-multiplier-select">
-          <option value="3">x3</option>
-          <option value="5">x5</option>
-          <option value="10">x10</option>
-        </select>
-        <button class="btn btn-primary btn-sm" onclick="activateCard()">Activer carte</button>
+      <div class="section-body collapsed">
+        <div class="cards-all-types" id="cards-container"></div>
       </div>
     </div>
 
     <!-- VILLAGES -->
-    <div class="section">
-      <div class="section-header">
+    <div class="section collapsible">
+      <div class="section-header" onclick="toggleSection(this)">
         <h2>Villages</h2>
+        <span class="collapse-icon">+</span>
       </div>
-      <div id="villages-container"></div>
-      <div class="add-village-form">
-        <input type="text" id="new-village-name" class="input-md" placeholder="Nom du village...">
-        <button class="btn btn-primary" onclick="addVillage()">+ Ajouter village</button>
+      <div class="section-body collapsed">
+        <div id="villages-container"></div>
+        <div class="add-village-form">
+          <input type="text" id="new-village-name" class="input-md" placeholder="Nom du village...">
+          <button class="btn btn-primary" onclick="addVillage()">+ Ajouter village</button>
+        </div>
       </div>
     </div>
 
@@ -79,17 +71,32 @@
         <h2>Trade</h2>
       </div>
       <div class="trade-form">
-        <span style="color: var(--text-secondary); font-size: 0.85rem;">Envoyer a l'autre joueur :</span>
-        <select id="trade-type-select">
-          <option value="Gibier">Gibier</option>
-          <option value="Tunique">Tunique</option>
-          <option value="Vaisselle">Vaisselle</option>
-          <option value="Chaise">Chaise</option>
-          <option value="Sel">Sel</option>
-          <option value="Epices">Epices</option>
-          <option value="Soie">Soie</option>
-        </select>
-        <input type="number" id="trade-amount" class="input-sm" placeholder="Quantite" min="1">
+        <div class="trade-row">
+          <label class="trade-label">Depuis :</label>
+          <select id="trade-village-select"></select>
+        </div>
+        <div class="trade-row">
+          <label class="trade-label">Ressource :</label>
+          <select id="trade-type-select">
+            <option value="Gibier">Gibier</option>
+            <option value="Tunique">Tunique</option>
+            <option value="Vaisselle">Vaisselle</option>
+            <option value="Chaise">Chaise</option>
+            <option value="Sel">Sel</option>
+            <option value="Epices">Epices</option>
+            <option value="Soie">Soie</option>
+          </select>
+        </div>
+        <div class="trade-row">
+          <label class="trade-label">Quantite :</label>
+          <div class="trade-slider-group">
+            <input type="range" id="trade-slider" class="trade-slider" min="0" max="2700" value="0"
+              oninput="document.getElementById('trade-amount').value = this.value; document.getElementById('trade-slider-value').textContent = this.value">
+            <input type="number" id="trade-amount" class="input-sm" value="0" min="0" max="2700"
+              oninput="document.getElementById('trade-slider').value = this.value; document.getElementById('trade-slider-value').textContent = this.value">
+            <span id="trade-slider-value" class="trade-slider-val">0</span>
+          </div>
+        </div>
         <button class="btn btn-primary" onclick="sendTrade()">Envoyer</button>
       </div>
       <div id="trade-history"></div>

@@ -4,7 +4,9 @@
 
 let currentPlayerId = null;
 let players = [];
-let refreshInterval = null;
+let cachedData = {}; // Cache local : { villageId: { productions, stocks } }
+let stockTickInterval = null;
+let localChangeInProgress = false; // Bloque les refreshes realtime pendant une modif locale
 
 // ---- INIT ----
 
@@ -16,7 +18,6 @@ async function init() {
 
   renderPlayerTabs();
   switchPlayer(players[0].id);
-  startAutoRefresh();
   setupRealtimeSubscriptions();
 }
 
@@ -38,7 +39,6 @@ function renderPlayerTabs() {
 async function switchPlayer(playerId) {
   currentPlayerId = playerId;
 
-  // Update tab styling
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.classList.toggle('active', parseInt(btn.dataset.playerId) === playerId);
   });
@@ -49,6 +49,7 @@ async function switchPlayer(playerId) {
   document.getElementById('capacity-input').value = player.stock_capacity;
 
   await refreshDashboard();
+  startStockTick();
 }
 
 // ---- DASHBOARD REFRESH ----
@@ -57,15 +58,55 @@ async function refreshDashboard() {
   await Promise.all([
     renderVillages(),
     renderCards(),
-    renderTradeHistory()
+    renderTradeHistory(),
+    populateTradeVillages(),
+    renderKPIs()
   ]);
 }
 
-function startAutoRefresh() {
-  if (refreshInterval) clearInterval(refreshInterval);
-  refreshInterval = setInterval(() => {
-    if (currentPlayerId) renderVillages();
-  }, UPDATE_INTERVAL_MS);
+// Tick leger : met a jour uniquement les chiffres de stock (pas de rebuild DOM)
+function startStockTick() {
+  if (stockTickInterval) clearInterval(stockTickInterval);
+  stockTickInterval = setInterval(tickStockDisplay, UPDATE_INTERVAL_MS);
+}
+
+function tickStockDisplay() {
+  const player = players.find(p => p.id === currentPlayerId);
+  if (!player) return;
+
+  const elements = document.querySelectorAll('[data-stock-key]');
+  elements.forEach(el => {
+    const key = el.dataset.stockKey;
+    const cached = cachedData[key];
+    if (!cached) return;
+
+    const currentStock = Math.min(
+      calculateCurrentStock(cached.stock, cached.dailyAmount, cached.multiplier),
+      player.stock_capacity
+    );
+    const percent = player.stock_capacity > 0 ? Math.min(100, (currentStock / player.stock_capacity) * 100) : 0;
+    const isNearCap = percent >= 90;
+
+    // Mettre a jour le texte
+    const valueEl = el.querySelector('.stock-value');
+    if (valueEl) {
+      valueEl.textContent = `${Math.floor(currentStock)} / ${player.stock_capacity}`;
+      valueEl.onclick = () => promptManualStock(cached.villageId, cached.banquetType, Math.floor(currentStock));
+    }
+
+    // Mettre a jour la barre
+    const fillEl = el.querySelector('.progress-fill');
+    if (fillEl) {
+      fillEl.style.width = percent + '%';
+      fillEl.classList.toggle('progress-danger', isNearCap);
+    }
+
+    // Mettre a jour la ligne
+    const rowEl = el.closest('.banquet-row');
+    if (rowEl) {
+      rowEl.classList.toggle('near-cap', isNearCap);
+    }
+  });
 }
 
 // ---- VILLAGES ----
@@ -98,7 +139,6 @@ async function createVillageCard(village, capacity) {
   const card = document.createElement('div');
   card.className = 'village-card';
 
-  // Recuperer production et stocks
   const [prodResult, stockResult] = await Promise.all([
     db.from('production').select('*').eq('village_id', village.id),
     db.from('stocks').select('*').eq('village_id', village.id)
@@ -128,23 +168,33 @@ async function createVillageCard(village, capacity) {
     let currentStock = 0;
     if (stock) {
       currentStock = calculateCurrentStock(stock, dailyAmount, multiplier);
-      currentStock = Math.min(currentStock, capacity); // Cap a la capacite
+      currentStock = Math.min(currentStock, capacity);
     }
 
     const percent = capacity > 0 ? Math.min(100, (currentStock / capacity) * 100) : 0;
     const isNearCap = percent >= 90;
+    const stockKey = `${village.id}-${type}`;
+
+    // Cache pour le tick
+    cachedData[stockKey] = {
+      stock: stock || { amount: 0, last_updated: new Date().toISOString() },
+      dailyAmount,
+      multiplier,
+      villageId: village.id,
+      banquetType: type
+    };
 
     html += `
       <div class="banquet-row ${isNearCap ? 'near-cap' : ''}">
         <div class="banquet-type">${type}</div>
         <div class="banquet-prod">
           <input type="number" class="input-sm" value="${dailyAmount}" min="0"
-            onchange="updateProduction(${village.id}, '${type}', this.value)" title="Production/jour">
+            onblur="updateProduction(${village.id}, '${type}', this.value)" title="Production/jour">
           <span class="prod-label">/j</span>
           ${multiplier > 1 ? `<span class="multiplier-badge">x${multiplier}</span>` : ''}
           ${multiplier > 1 ? `<span class="effective-prod">(${effectiveDaily}/j)</span>` : ''}
         </div>
-        <div class="banquet-stock">
+        <div class="banquet-stock" data-stock-key="${stockKey}">
           <div class="progress-bar">
             <div class="progress-fill ${isNearCap ? 'progress-danger' : ''}" style="width: ${percent}%"></div>
           </div>
@@ -165,7 +215,12 @@ async function createVillageCard(village, capacity) {
 async function updateProduction(villageId, banquetType, value) {
   const dailyAmount = parseInt(value) || 0;
 
-  // Snapshot le stock actuel avant de changer la production
+  // Verifier si la valeur a vraiment change
+  const stockKey = `${villageId}-${banquetType}`;
+  if (cachedData[stockKey] && cachedData[stockKey].dailyAmount === dailyAmount) return;
+
+  localChangeInProgress = true;
+
   const { data: stock } = await db
     .from('stocks')
     .select('*')
@@ -187,7 +242,6 @@ async function updateProduction(villageId, banquetType, value) {
     await snapshotStock(villageId, banquetType, currentAmount);
   }
 
-  // Mettre a jour la production
   await db
     .from('production')
     .upsert({
@@ -195,6 +249,14 @@ async function updateProduction(villageId, banquetType, value) {
       banquet_type: banquetType,
       daily_amount: dailyAmount
     }, { onConflict: 'village_id,banquet_type' });
+
+  // Mettre a jour le cache local sans re-render
+  if (cachedData[stockKey]) {
+    cachedData[stockKey].dailyAmount = dailyAmount;
+  }
+
+  // Debloquer apres un delai
+  setTimeout(() => { localChangeInProgress = false; }, 3000);
 }
 
 // ---- MANUAL STOCK EDIT ----
@@ -204,7 +266,11 @@ function promptManualStock(villageId, banquetType, currentValue) {
   if (newValue !== null && newValue !== '') {
     const val = parseInt(newValue);
     if (!isNaN(val) && val >= 0) {
-      setManualStock(villageId, banquetType, val).then(() => renderVillages());
+      localChangeInProgress = true;
+      setManualStock(villageId, banquetType, val).then(() => {
+        renderVillages();
+        setTimeout(() => { localChangeInProgress = false; }, 3000);
+      });
     }
   }
 }
@@ -235,18 +301,17 @@ async function addVillage() {
     return;
   }
 
-  // Initialiser les stocks et la production
   await initVillageStocks(data.id);
   await initVillageProduction(data.id);
 
   input.value = '';
-  await renderVillages();
+  await Promise.all([renderVillages(), populateTradeVillages()]);
 }
 
 async function deleteVillage(villageId, villageName) {
   if (!confirm(`Supprimer le village "${villageName}" et toutes ses donnees ?`)) return;
   await db.from('villages').delete().eq('id', villageId);
-  await renderVillages();
+  await Promise.all([renderVillages(), populateTradeVillages()]);
 }
 
 // ---- CAPACITY ----
@@ -275,37 +340,45 @@ async function renderCards() {
   const container = document.getElementById('cards-container');
   container.innerHTML = '';
 
-  if (activeCards.length === 0) {
-    container.innerHTML = '<p class="empty-msg">Aucune carte active.</p>';
-    return;
-  }
-
-  activeCards.forEach(card => {
+  for (const type of BANQUET_TYPES) {
+    const active = activeCards.find(c => c.banquet_type === type);
     const div = document.createElement('div');
-    div.className = 'card-item';
+    div.className = 'card-type-row' + (active ? ' card-active' : '');
 
-    const remaining = new Date(card.expires_at) - new Date();
-    const hours = Math.floor(remaining / 3600000);
-    const minutes = Math.floor((remaining % 3600000) / 60000);
+    let timerHtml = '';
+    if (active) {
+      const remaining = new Date(active.expires_at) - new Date();
+      const hours = Math.floor(remaining / 3600000);
+      const minutes = Math.floor((remaining % 3600000) / 60000);
+      const isWarning = remaining < 3600000;
+      timerHtml = `<span class="card-timer ${isWarning ? 'timer-warning' : ''}" onclick="editCardTimer(${active.id}, '${active.expires_at}')" title="Cliquer pour modifier">${hours}h${String(minutes).padStart(2, '0')}</span>`;
+    }
 
     div.innerHTML = `
-      <span class="card-type">${card.banquet_type}</span>
-      <span class="card-multiplier">x${card.multiplier}</span>
-      <span class="card-timer ${remaining < 3600000 ? 'timer-warning' : ''}">${hours}h${String(minutes).padStart(2, '0')}</span>
-      <button class="btn btn-ghost btn-sm" onclick="removeCard(${card.id})">X</button>
+      <span class="card-type-name">${type}</span>
+      <div class="card-multipliers">
+        ${[3, 5, 10].map(m => `
+          <button class="card-mult-btn ${active && active.multiplier === m ? 'card-mult-active' : ''}"
+            onclick="activateCard('${type}', ${m})">${active && active.multiplier === m ? 'x' + m : 'x' + m}</button>
+        `).join('')}
+      </div>
+      ${timerHtml}
+      ${active ? `<button class="card-remove-btn" onclick="removeCard(${active.id})">X</button>` : ''}
     `;
     container.appendChild(div);
-  });
+  }
 }
 
-async function activateCard() {
-  const type = document.getElementById('card-type-select').value;
-  const multiplier = parseInt(document.getElementById('card-multiplier-select').value);
-
+async function activateCard(type, multiplier) {
   const now = new Date();
-  const expiresAt = new Date(now.getTime() + 12 * 60 * 60 * 1000); // +12h
+  const expiresAt = new Date(now.getTime() + 12 * 60 * 60 * 1000);
 
-  // Snapshot tous les stocks du joueur pour ce type avant d'activer la carte
+  const existing = await getActiveCards(currentPlayerId);
+  const old = existing.find(c => c.banquet_type === type);
+  if (old) {
+    await db.from('cards').delete().eq('id', old.id);
+  }
+
   const { data: villages } = await db
     .from('villages')
     .select('id')
@@ -328,7 +401,7 @@ async function activateCard() {
           .eq('banquet_type', type)
           .single();
 
-        const oldMultiplier = await getActiveMultiplier(currentPlayerId, type);
+        const oldMultiplier = old ? old.multiplier : 1;
         const dailyAmount = prod ? prod.daily_amount : 0;
         const currentAmount = calculateCurrentStock(stock, dailyAmount, oldMultiplier);
         await snapshotStock(v.id, type, currentAmount);
@@ -347,6 +420,20 @@ async function activateCard() {
   await Promise.all([renderCards(), renderVillages()]);
 }
 
+async function editCardTimer(cardId, currentExpires) {
+  const remaining = new Date(currentExpires) - new Date();
+  const currentHours = Math.max(0, remaining / 3600000).toFixed(1);
+  const input = prompt(`Temps restant (en heures) :`, currentHours);
+  if (input === null || input === '') return;
+
+  const hours = parseFloat(input);
+  if (isNaN(hours) || hours < 0) return;
+
+  const newExpires = new Date(Date.now() + hours * 3600000).toISOString();
+  await db.from('cards').update({ expires_at: newExpires }).eq('id', cardId);
+  await Promise.all([renderCards(), renderVillages()]);
+}
+
 async function removeCard(cardId) {
   await db.from('cards').delete().eq('id', cardId);
   await Promise.all([renderCards(), renderVillages()]);
@@ -355,18 +442,21 @@ async function removeCard(cardId) {
 // ---- TRADE ----
 
 async function sendTrade() {
+  const villageId = parseInt(document.getElementById('trade-village-select').value);
   const type = document.getElementById('trade-type-select').value;
   const amount = parseInt(document.getElementById('trade-amount').value);
 
-  if (!amount || amount <= 0) return;
+  if (!villageId || !amount || amount <= 0) return;
 
   const otherPlayer = players.find(p => p.id !== currentPlayerId);
   if (!otherPlayer) return;
 
-  const success = await executeTrade(currentPlayerId, otherPlayer.id, type, amount);
+  const success = await executeTrade(currentPlayerId, otherPlayer.id, villageId, type, amount);
   if (success) {
-    document.getElementById('trade-amount').value = '';
-    await renderTradeHistory();
+    document.getElementById('trade-amount').value = '0';
+    document.getElementById('trade-slider').value = '0';
+    document.getElementById('trade-slider-value').textContent = '0';
+    await Promise.all([renderVillages(), renderTradeHistory()]);
   }
 }
 
@@ -399,32 +489,96 @@ async function renderTradeHistory() {
 
 // ---- REALTIME SUBSCRIPTIONS ----
 
+let realtimeDebounce = null;
+
 function setupRealtimeSubscriptions() {
   db.channel('db-changes')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'stocks' }, () => {
-      renderVillages();
+      debouncedRefresh();
     })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'cards' }, () => {
       renderCards();
-      renderVillages();
+      debouncedRefresh();
     })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'trades' }, () => {
       renderTradeHistory();
     })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'villages' }, () => {
-      renderVillages();
+      debouncedRefresh();
     })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'production' }, () => {
-      renderVillages();
+      debouncedRefresh();
     })
     .subscribe();
+}
+
+// Debounce pour eviter les re-renders en cascade
+function debouncedRefresh() {
+  if (localChangeInProgress) return; // Ignorer les echos de nos propres changements
+  if (realtimeDebounce) clearTimeout(realtimeDebounce);
+  realtimeDebounce = setTimeout(() => {
+    if (!localChangeInProgress) renderVillages();
+  }, 2000);
 }
 
 // ---- CARD TIMER REFRESH ----
 
 setInterval(() => {
   if (currentPlayerId) renderCards();
-}, 60000); // Refresh timers toutes les minutes
+}, 60000);
+
+// ---- KPIs ----
+
+async function renderKPIs() {
+  const container = document.getElementById('kpi-container');
+  container.innerHTML = '';
+
+  const { data: villages } = await db
+    .from('villages')
+    .select('id')
+    .eq('player_id', currentPlayerId);
+
+  if (!villages || villages.length === 0) return;
+
+  const villageIds = villages.map(v => v.id);
+
+  const { data: productions } = await db
+    .from('production')
+    .select('village_id, banquet_type, daily_amount')
+    .in('village_id', villageIds);
+
+  const prods = productions || [];
+
+  for (const type of BANQUET_TYPES) {
+    const multiplier = await getActiveMultiplier(currentPlayerId, type);
+    const totalDaily = prods
+      .filter(p => p.banquet_type === type)
+      .reduce((sum, p) => sum + p.daily_amount, 0);
+
+    const perHour = Math.round((totalDaily * multiplier) / 24);
+
+    const div = document.createElement('div');
+    div.className = 'kpi-card';
+    div.innerHTML = `
+      <span class="kpi-value">${perHour}</span>
+      <span class="kpi-label">${type}/h</span>
+      ${multiplier > 1 ? `<span class="kpi-mult">x${multiplier}</span>` : ''}
+    `;
+    container.appendChild(div);
+  }
+}
+
+// ---- COLLAPSIBLE SECTIONS ----
+
+function toggleSection(headerEl) {
+  const body = headerEl.nextElementSibling;
+  const icon = headerEl.querySelector('.collapse-icon');
+  const isCollapsed = body.classList.contains('collapsed');
+
+  body.classList.toggle('collapsed');
+  headerEl.classList.toggle('open');
+  icon.textContent = isCollapsed ? '−' : '+';
+}
 
 // ---- START ----
 
