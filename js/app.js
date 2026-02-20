@@ -17,9 +17,28 @@ async function init() {
 
   if (players.length === 0) return;
 
+  await ensureAllBanquetRows();
   renderPlayerTabs();
   switchPlayer(players[0].id);
   setupRealtimeSubscriptions();
+}
+
+// Migration : s'assure que tous les villages ont des lignes stock/production pour tous les BANQUET_TYPES
+async function ensureAllBanquetRows() {
+  const { data: villages } = await db.from('villages').select('id');
+  if (!villages) return;
+
+  const now = new Date().toISOString();
+  for (const v of villages) {
+    for (const type of BANQUET_TYPES) {
+      await db.from('stocks').upsert({
+        village_id: v.id, banquet_type: type, amount: 0, last_updated: now
+      }, { onConflict: 'village_id,banquet_type', ignoreDuplicates: true });
+      await db.from('production').upsert({
+        village_id: v.id, banquet_type: type, daily_amount: 0
+      }, { onConflict: 'village_id,banquet_type', ignoreDuplicates: true });
+    }
+  }
 }
 
 // ---- PLAYER TABS ----
@@ -624,6 +643,136 @@ function toggleSection(headerEl) {
   body.classList.toggle('collapsed');
   headerEl.classList.toggle('open');
   icon.textContent = isCollapsed ? '−' : '+';
+}
+
+// ---- TRADE DEST STOCKS PREVIEW ----
+
+async function showDestVillageStocks() {
+  const container = document.getElementById('trade-dest-stocks');
+  const villageId = parseInt(document.getElementById('trade-dest-village-select').value);
+  if (!villageId) { container.innerHTML = ''; return; }
+
+  const otherPlayer = players.find(p => p.id !== currentPlayerId);
+  if (!otherPlayer) return;
+
+  const [stockResult, prodResult] = await Promise.all([
+    db.from('stocks').select('*').eq('village_id', villageId),
+    db.from('production').select('*').eq('village_id', villageId)
+  ]);
+
+  const stocks = stockResult.data || [];
+  const prods = prodResult.data || [];
+
+  let html = '<div class="dest-stocks-grid">';
+  for (const type of BANQUET_TYPES) {
+    const stock = stocks.find(s => s.banquet_type === type);
+    const prod = prods.find(p => p.banquet_type === type);
+    const dailyAmount = prod ? prod.daily_amount : 0;
+    const multiplier = await getActiveMultiplier(otherPlayer.id, type);
+    let current = 0;
+    if (stock) {
+      current = Math.min(calculateCurrentStock(stock, dailyAmount, multiplier), otherPlayer.stock_capacity);
+    }
+    html += `<div class="dest-stock-item">
+      <span class="dest-stock-type">${type}</span>
+      <span class="dest-stock-val">${Math.floor(current)}</span>
+    </div>`;
+  }
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+// ---- RECAP ----
+
+async function showRecap() {
+  const overlay = document.getElementById('recap-overlay');
+  const content = document.getElementById('recap-content');
+
+  const player = players.find(p => p.id === currentPlayerId);
+  if (!player) return;
+
+  const { data: villages } = await db
+    .from('villages')
+    .select('*')
+    .eq('player_id', currentPlayerId)
+    .order('id');
+
+  if (!villages || villages.length === 0) {
+    content.innerHTML = '<p class="empty-msg">Aucun village.</p>';
+    overlay.classList.add('recap-visible');
+    return;
+  }
+
+  let html = `<div class="recap-header">
+    <h2>${player.name} — Recap stocks</h2>
+    <button class="btn btn-ghost btn-sm" onclick="closeRecap()">Fermer</button>
+  </div>`;
+
+  // Tableau header
+  html += '<table class="recap-table"><thead><tr><th>Village</th>';
+  for (const type of BANQUET_TYPES) {
+    html += `<th>${type}</th>`;
+  }
+  html += '</tr></thead><tbody>';
+
+  const totals = {};
+  BANQUET_TYPES.forEach(t => totals[t] = 0);
+
+  for (const village of villages) {
+    const [stockResult, prodResult] = await Promise.all([
+      db.from('stocks').select('*').eq('village_id', village.id),
+      db.from('production').select('*').eq('village_id', village.id)
+    ]);
+    const stocks = stockResult.data || [];
+    const prods = prodResult.data || [];
+
+    html += `<tr><td class="recap-village-name">${village.name}</td>`;
+    for (const type of BANQUET_TYPES) {
+      const stock = stocks.find(s => s.banquet_type === type);
+      const prod = prods.find(p => p.banquet_type === type);
+      const dailyAmount = prod ? prod.daily_amount : 0;
+      const multiplier = await getActiveMultiplier(currentPlayerId, type);
+      let current = 0;
+      if (stock) {
+        current = Math.min(calculateCurrentStock(stock, dailyAmount, multiplier), player.stock_capacity);
+      }
+      const val = Math.floor(current);
+      totals[type] += val;
+      const isHigh = val >= player.stock_capacity * 0.9;
+      const isLow = val < player.stock_capacity * 0.2;
+      html += `<td class="${isHigh ? 'recap-high' : ''} ${isLow ? 'recap-low' : ''}">${val}</td>`;
+    }
+    html += '</tr>';
+  }
+
+  // Totals row
+  html += '<tr class="recap-totals"><td>TOTAL</td>';
+  for (const type of BANQUET_TYPES) {
+    html += `<td>${totals[type]}</td>`;
+  }
+  html += '</tr>';
+
+  html += '</tbody></table>';
+
+  // Besoins (capacite - stock)
+  html += '<div class="recap-needs"><h3>Besoins (capacite - stock)</h3><div class="recap-needs-grid">';
+  for (const type of BANQUET_TYPES) {
+    const maxTotal = player.stock_capacity * (villages.length);
+    const need = Math.max(0, maxTotal - totals[type]);
+    html += `<div class="recap-need-item">
+      <span class="recap-need-type">${type}</span>
+      <span class="recap-need-val">${need}</span>
+    </div>`;
+  }
+  html += '</div></div>';
+
+  content.innerHTML = html;
+  overlay.classList.add('recap-visible');
+}
+
+function closeRecap(event) {
+  if (event && event.target !== event.currentTarget) return;
+  document.getElementById('recap-overlay').classList.remove('recap-visible');
 }
 
 // ---- BEBOU ----

@@ -10,8 +10,16 @@
 
   <!-- HEADER -->
   <div class="header">
-    <h1>Stronghold Tracker</h1>
-    <span class="subtitle">Gestion des banquets en temps reel</span>
+    <div>
+      <h1>Stronghold Tracker</h1>
+      <span class="subtitle">Gestion des banquets en temps reel</span>
+    </div>
+    <button class="btn btn-ghost btn-sm" onclick="showRecap()">Recap</button>
+  </div>
+
+  <!-- RECAP OVERLAY -->
+  <div id="recap-overlay" class="recap-overlay" onclick="closeRecap(event)">
+    <div class="recap-content" id="recap-content"></div>
   </div>
 
   <!-- PLAYER TABS -->
@@ -77,8 +85,9 @@
         </div>
         <div class="trade-row">
           <label class="trade-label">Vers :</label>
-          <select id="trade-dest-village-select"></select>
+          <select id="trade-dest-village-select" onchange="showDestVillageStocks()"></select>
         </div>
+        <div id="trade-dest-stocks" class="trade-dest-stocks"></div>
         <div class="trade-row">
           <label class="trade-label">Ressource :</label>
           <select id="trade-type-select">
