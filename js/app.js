@@ -17,28 +17,36 @@ async function init() {
 
   if (players.length === 0) return;
 
-  await ensureAllBanquetRows();
   renderPlayerTabs();
   switchPlayer(players[0].id);
   setupRealtimeSubscriptions();
+
+  // Migration en arriere-plan (une seule fois par session)
+  if (!sessionStorage.getItem('banquet_rows_ok')) {
+    ensureAllBanquetRows().then(() => sessionStorage.setItem('banquet_rows_ok', '1'));
+  }
 }
 
 // Migration : s'assure que tous les villages ont des lignes stock/production pour tous les BANQUET_TYPES
 async function ensureAllBanquetRows() {
   const { data: villages } = await db.from('villages').select('id');
-  if (!villages) return;
+  if (!villages || villages.length === 0) return;
 
   const now = new Date().toISOString();
+  const stockRows = [];
+  const prodRows = [];
+
   for (const v of villages) {
     for (const type of BANQUET_TYPES) {
-      await db.from('stocks').upsert({
-        village_id: v.id, banquet_type: type, amount: 0, last_updated: now
-      }, { onConflict: 'village_id,banquet_type', ignoreDuplicates: true });
-      await db.from('production').upsert({
-        village_id: v.id, banquet_type: type, daily_amount: 0
-      }, { onConflict: 'village_id,banquet_type', ignoreDuplicates: true });
+      stockRows.push({ village_id: v.id, banquet_type: type, amount: 0, last_updated: now });
+      prodRows.push({ village_id: v.id, banquet_type: type, daily_amount: 0 });
     }
   }
+
+  await Promise.all([
+    db.from('stocks').upsert(stockRows, { onConflict: 'village_id,banquet_type', ignoreDuplicates: true }),
+    db.from('production').upsert(prodRows, { onConflict: 'village_id,banquet_type', ignoreDuplicates: true })
+  ]);
 }
 
 // ---- PLAYER TABS ----
