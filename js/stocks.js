@@ -2,7 +2,7 @@
 // Calcul temps reel des stocks
 // ============================================
 
-const BANQUET_TYPES = ['Gibier', 'Tunique', 'Vaisselle', 'Chaise', 'Sel', 'Epices', 'Soie', 'Vin'];
+const BANQUET_TYPES = ['Gibier', 'Chaise', 'Vaisselle', 'Tunique', 'Vin', 'Sel', 'Epices', 'Soie'];
 const UPDATE_INTERVAL_MS = 10000; // Refresh affichage toutes les 10s
 
 let stockTimers = {};
