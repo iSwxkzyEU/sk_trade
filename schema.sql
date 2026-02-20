@@ -23,7 +23,7 @@ CREATE TABLE villages (
 CREATE TABLE production (
   id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   village_id BIGINT NOT NULL REFERENCES villages(id) ON DELETE CASCADE,
-  banquet_type TEXT NOT NULL CHECK (banquet_type IN ('Gibier','Tunique','Vaisselle','Chaise','Sel','Epices','Soie')),
+  banquet_type TEXT NOT NULL CHECK (banquet_type IN ('Gibier','Tunique','Vaisselle','Chaise','Sel','Epices','Soie','Vin')),
   daily_amount INTEGER NOT NULL DEFAULT 0,
   UNIQUE(village_id, banquet_type)
 );
@@ -32,7 +32,7 @@ CREATE TABLE production (
 CREATE TABLE stocks (
   id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   village_id BIGINT NOT NULL REFERENCES villages(id) ON DELETE CASCADE,
-  banquet_type TEXT NOT NULL CHECK (banquet_type IN ('Gibier','Tunique','Vaisselle','Chaise','Sel','Epices','Soie')),
+  banquet_type TEXT NOT NULL CHECK (banquet_type IN ('Gibier','Tunique','Vaisselle','Chaise','Sel','Epices','Soie','Vin')),
   amount DOUBLE PRECISION NOT NULL DEFAULT 0,
   last_updated TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(village_id, banquet_type)
@@ -42,7 +42,7 @@ CREATE TABLE stocks (
 CREATE TABLE cards (
   id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   player_id BIGINT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
-  banquet_type TEXT NOT NULL CHECK (banquet_type IN ('Gibier','Tunique','Vaisselle','Chaise','Sel','Epices','Soie')),
+  banquet_type TEXT NOT NULL CHECK (banquet_type IN ('Gibier','Tunique','Vaisselle','Chaise','Sel','Epices','Soie','Vin')),
   multiplier INTEGER NOT NULL CHECK (multiplier IN (3, 5, 10)),
   activated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   expires_at TIMESTAMPTZ NOT NULL
@@ -53,7 +53,7 @@ CREATE TABLE trades (
   id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   from_player_id BIGINT NOT NULL REFERENCES players(id),
   to_player_id BIGINT NOT NULL REFERENCES players(id),
-  banquet_type TEXT NOT NULL CHECK (banquet_type IN ('Gibier','Tunique','Vaisselle','Chaise','Sel','Epices','Soie')),
+  banquet_type TEXT NOT NULL CHECK (banquet_type IN ('Gibier','Tunique','Vaisselle','Chaise','Sel','Epices','Soie','Vin')),
   amount INTEGER NOT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
