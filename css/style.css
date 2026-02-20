@@ -765,6 +765,40 @@ select:focus {
   padding: 12px 0;
 }
 
+/* ---- BATCH STOCK EDIT ---- */
+
+.btn-edit-stocks {
+  background: transparent;
+  color: var(--accent-dim);
+  border: 1px solid rgba(201, 169, 110, 0.2);
+}
+
+.btn-edit-stocks:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-subtle);
+}
+
+.stock-edit-input {
+  width: 80px;
+  text-align: right;
+  animation: editFadeIn 0.15s ease;
+}
+
+.stock-edit-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.stock-edit-mode .progress-bar {
+  opacity: 0.3;
+}
+
+@keyframes editFadeIn {
+  from { opacity: 0; transform: translateY(-2px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 /* ---- SOUS CARTE TOGGLE ---- */
 
 .sous-carte-toggle {

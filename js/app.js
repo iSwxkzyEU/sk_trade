@@ -187,12 +187,14 @@ async function createVillageCard(village, capacity) {
   const productions = prodResult.data || [];
   const stocks = stockResult.data || [];
 
+  card.dataset.villageId = village.id;
+
   let html = `
     <div class="village-header">
       <h3>${village.name}</h3>
       <div class="village-actions">
-        <button class="btn btn-transfer btn-sm" onclick="transferVillage(${village.id})" title="Transférer vers l'autre joueur">Transférer</button>
-        <button class="btn btn-danger btn-sm" onclick="banquet(${village.id})">Banquet</button>
+        <button class="btn btn-edit-stocks btn-sm" onclick="enterStockEditMode(${village.id})" title="Modifier tous les stocks d'un coup">Editer stocks</button>
+<button class="btn btn-danger btn-sm" onclick="banquet(${village.id})">Banquet</button>
         <button class="btn btn-ghost btn-sm" onclick="deleteVillage(${village.id}, '${village.name}')">Suppr.</button>
       </div>
     </div>
@@ -365,6 +367,108 @@ function promptManualStock(villageId, banquetType, currentValue) {
       });
     }
   }
+}
+
+// ---- BATCH STOCK EDIT ----
+
+function enterStockEditMode(villageId) {
+  const card = document.querySelector(`.village-card[data-village-id="${villageId}"]`);
+  if (!card) return;
+
+  card.classList.add('stock-edit-mode');
+
+  // Remplacer chaque stock-value par un input
+  for (const type of BANQUET_TYPES) {
+    const stockKey = `${villageId}-${type}`;
+    const el = card.querySelector(`[data-stock-key="${stockKey}"]`);
+    if (!el) continue;
+
+    const cached = cachedData[stockKey];
+    const player = players.find(p => p.id === currentPlayerId);
+    let currentStock = 0;
+    if (cached && player) {
+      currentStock = Math.min(
+        calculateCurrentStock(cached.stock, cached.dailyAmount, cached.multiplier),
+        player.stock_capacity
+      );
+    }
+
+    const valueEl = el.querySelector('.stock-value');
+    if (valueEl) {
+      const input = document.createElement('input');
+      input.type = 'number';
+      input.className = 'input-sm stock-edit-input';
+      input.value = Math.floor(currentStock);
+      input.min = 0;
+      input.dataset.villageId = villageId;
+      input.dataset.banquetType = type;
+      // Valider avec Enter sur le dernier champ, sinon tab au suivant
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          const allInputs = card.querySelectorAll('.stock-edit-input');
+          const idx = Array.from(allInputs).indexOf(input);
+          if (idx < allInputs.length - 1) {
+            allInputs[idx + 1].focus();
+            allInputs[idx + 1].select();
+          } else {
+            saveAllStocks(villageId);
+          }
+        } else if (e.key === 'Escape') {
+          cancelStockEdit(villageId);
+        }
+      });
+      valueEl.replaceWith(input);
+    }
+  }
+
+  // Focus le premier input
+  const firstInput = card.querySelector('.stock-edit-input');
+  if (firstInput) {
+    firstInput.focus();
+    firstInput.select();
+  }
+
+  // Remplacer le bouton "Editer" par "Valider" + "Annuler"
+  const editBtn = card.querySelector('.btn-edit-stocks');
+  if (editBtn) {
+    const btnGroup = document.createElement('div');
+    btnGroup.className = 'stock-edit-actions';
+    btnGroup.innerHTML = `
+      <button class="btn btn-primary btn-sm" onclick="saveAllStocks(${villageId})">Valider</button>
+      <button class="btn btn-ghost btn-sm" onclick="cancelStockEdit(${villageId})">Annuler</button>
+    `;
+    editBtn.replaceWith(btnGroup);
+  }
+}
+
+async function saveAllStocks(villageId) {
+  const card = document.querySelector(`.village-card[data-village-id="${villageId}"]`);
+  if (!card) return;
+
+  const inputs = card.querySelectorAll('.stock-edit-input');
+  if (inputs.length === 0) return;
+
+  localChangeInProgress = true;
+
+  // Sauvegarder tous les stocks en parallele
+  const saves = [];
+  inputs.forEach(input => {
+    const val = parseInt(input.value);
+    const type = input.dataset.banquetType;
+    if (!isNaN(val) && val >= 0) {
+      saves.push(setManualStock(villageId, type, val));
+    }
+  });
+
+  await Promise.all(saves);
+  await renderVillages();
+  setTimeout(() => { localChangeInProgress = false; }, 3000);
+}
+
+function cancelStockEdit(villageId) {
+  // Re-render pour restaurer l'affichage normal
+  renderVillages();
 }
 
 // ---- BANQUET (reset village) ----
