@@ -199,6 +199,27 @@ async function createVillageCard(village, capacity) {
     <div class="banquet-grid">
   `;
 
+  // Creer les lignes stock/production manquantes en batch
+  const missingStocks = [];
+  const missingProds = [];
+  const now = new Date().toISOString();
+  for (const type of BANQUET_TYPES) {
+    if (!stocks.find(s => s.banquet_type === type)) {
+      missingStocks.push({ village_id: village.id, banquet_type: type, amount: 0, last_updated: now });
+    }
+    if (!productions.find(p => p.banquet_type === type)) {
+      missingProds.push({ village_id: village.id, banquet_type: type, daily_amount: 0 });
+    }
+  }
+  if (missingStocks.length > 0) {
+    await db.from('stocks').upsert(missingStocks, { onConflict: 'village_id,banquet_type', ignoreDuplicates: true });
+    missingStocks.forEach(s => stocks.push(s));
+  }
+  if (missingProds.length > 0) {
+    await db.from('production').upsert(missingProds, { onConflict: 'village_id,banquet_type', ignoreDuplicates: true });
+    missingProds.forEach(p => productions.push(p));
+  }
+
   for (const type of BANQUET_TYPES) {
     const prod = productions.find(p => p.banquet_type === type);
     const stock = stocks.find(s => s.banquet_type === type);
@@ -218,7 +239,7 @@ async function createVillageCard(village, capacity) {
 
     // Cache pour le tick
     cachedData[stockKey] = {
-      stock: stock || { amount: 0, last_updated: new Date().toISOString() },
+      stock: stock || { amount: 0, last_updated: now },
       dailyAmount,
       multiplier,
       villageId: village.id,
@@ -288,6 +309,9 @@ async function updateProduction(villageId, banquetType, value) {
     const multiplier = await getActiveMultiplier(currentPlayerId, banquetType);
     const currentAmount = calculateCurrentStock(stock, oldDaily, multiplier);
     await snapshotStock(villageId, banquetType, currentAmount);
+  } else {
+    // Creer la ligne stock si elle n'existe pas
+    await snapshotStock(villageId, banquetType, 0);
   }
 
   await db
