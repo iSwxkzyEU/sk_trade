@@ -745,9 +745,11 @@ async function showInternalStocks(selectId, containerId) {
     if (stock) {
       current = Math.min(calculateCurrentStock(stock, dailyAmount, multiplier), player.stock_capacity);
     }
+    const need = Math.max(0, player.stock_capacity - Math.floor(current));
     html += `<div class="dest-stock-item">
       <span class="dest-stock-type">${type}</span>
       <span class="dest-stock-val">${Math.floor(current)}</span>
+      <span class="dest-stock-need">${need > 0 ? '-' + need : 'plein'}</span>
     </div>`;
   }
   html += '</div>';
