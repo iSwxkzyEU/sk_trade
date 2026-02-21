@@ -363,6 +363,13 @@ body {
   gap: 4px;
 }
 
+.stock-info {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
 .stock-value {
   font-size: 0.75rem;
   color: var(--text-secondary);
@@ -374,6 +381,15 @@ body {
 
 .stock-value:hover {
   color: var(--accent);
+}
+
+.stock-eta {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  min-width: 38px;
+  text-align: right;
 }
 
 /* ---- PROGRESS BAR ---- */

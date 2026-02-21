@@ -9,6 +9,27 @@ let stockTickInterval = null;
 let localChangeInProgress = false; // Bloque les refreshes realtime pendant une modif locale
 let switchGeneration = 0; // Compteur anti-race-condition pour les switchs d'onglet
 
+// Calcule le temps restant avant pleine capacite et le formate
+function formatTimeToFull(currentStock, capacity, dailyAmount, multiplier) {
+  const effectiveDaily = dailyAmount * multiplier;
+  if (effectiveDaily <= 0 || currentStock >= capacity) return null;
+  const remaining = capacity - currentStock;
+  const days = remaining / effectiveDaily;
+  const totalHours = days * 24;
+
+  if (totalHours < 1) {
+    return Math.ceil(totalHours * 60) + 'min';
+  } else if (totalHours < 24) {
+    const h = Math.floor(totalHours);
+    const m = Math.floor((totalHours - h) * 60);
+    return m > 0 ? h + 'h' + String(m).padStart(2, '0') : h + 'h';
+  } else {
+    const d = Math.floor(days);
+    const h = Math.floor((days - d) * 24);
+    return h > 0 ? d + 'j ' + h + 'h' : d + 'j';
+  }
+}
+
 // ---- INIT ----
 
 async function init() {
@@ -127,6 +148,13 @@ function tickStockDisplay() {
     if (valueEl) {
       valueEl.textContent = `${Math.floor(currentStock)} / ${player.stock_capacity}`;
       valueEl.onclick = () => promptManualStock(cached.villageId, cached.banquetType, Math.floor(currentStock));
+    }
+
+    // Mettre a jour l'ETA
+    const etaEl = el.querySelector('.stock-eta');
+    if (etaEl) {
+      const eta = formatTimeToFull(currentStock, player.stock_capacity, cached.dailyAmount, cached.multiplier);
+      etaEl.textContent = eta || '';
     }
 
     // Mettre a jour la barre
@@ -269,8 +297,11 @@ async function createVillageCard(village, capacity) {
           <div class="progress-bar">
             <div class="progress-fill ${isNearCap ? 'progress-danger' : ''}" style="width: ${percent}%"></div>
           </div>
-          <span class="stock-value" onclick="promptManualStock(${village.id}, '${type}', ${Math.floor(currentStock)})"
-            title="Cliquer pour modifier manuellement">${Math.floor(currentStock)} / ${capacity}</span>
+          <div class="stock-info">
+            <span class="stock-value" onclick="promptManualStock(${village.id}, '${type}', ${Math.floor(currentStock)})"
+              title="Cliquer pour modifier manuellement">${Math.floor(currentStock)} / ${capacity}</span>
+            <span class="stock-eta">${(() => { const eta = formatTimeToFull(currentStock, capacity, dailyAmount, multiplier); return eta ? eta : ''; })()}</span>
+          </div>
         </div>
       </div>
     `;
