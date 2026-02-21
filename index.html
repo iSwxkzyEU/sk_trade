@@ -93,16 +93,16 @@
           <div id="internal-to-stocks" class="trade-dest-stocks"></div>
           <div class="trade-row">
             <label class="trade-label">Ressource :</label>
-            <select id="internal-type-select">
-              <option value="Gibier">Gibier</option>
-              <option value="Chaise">Chaise</option>
-              <option value="Vaisselle">Vaisselle</option>
-              <option value="Tunique">Tunique</option>
-              <option value="Vin">Vin</option>
-              <option value="Sel">Sel</option>
-              <option value="Epices">Epices</option>
-              <option value="Soie">Soie</option>
-            </select>
+            <div class="resource-btn-group" id="internal-type-btns">
+              <button class="resource-btn active" onclick="selectResource('internal', this)" data-type="Gibier">Gibier</button>
+              <button class="resource-btn" onclick="selectResource('internal', this)" data-type="Chaise">Chaise</button>
+              <button class="resource-btn" onclick="selectResource('internal', this)" data-type="Vaisselle">Vaisselle</button>
+              <button class="resource-btn" onclick="selectResource('internal', this)" data-type="Tunique">Tunique</button>
+              <button class="resource-btn" onclick="selectResource('internal', this)" data-type="Vin">Vin</button>
+              <button class="resource-btn" onclick="selectResource('internal', this)" data-type="Sel">Sel</button>
+              <button class="resource-btn" onclick="selectResource('internal', this)" data-type="Epices">Epices</button>
+              <button class="resource-btn" onclick="selectResource('internal', this)" data-type="Soie">Soie</button>
+            </div>
           </div>
           <div class="trade-row">
             <label class="trade-label">Quantite :</label>
@@ -136,16 +136,16 @@
         <div id="trade-dest-stocks" class="trade-dest-stocks"></div>
         <div class="trade-row">
           <label class="trade-label">Ressource :</label>
-          <select id="trade-type-select">
-            <option value="Gibier">Gibier</option>
-            <option value="Chaise">Chaise</option>
-            <option value="Vaisselle">Vaisselle</option>
-            <option value="Tunique">Tunique</option>
-            <option value="Vin">Vin</option>
-            <option value="Sel">Sel</option>
-            <option value="Epices">Epices</option>
-            <option value="Soie">Soie</option>
-          </select>
+          <div class="resource-btn-group" id="trade-type-btns">
+            <button class="resource-btn active" onclick="selectResource('trade', this)" data-type="Gibier">Gibier</button>
+            <button class="resource-btn" onclick="selectResource('trade', this)" data-type="Chaise">Chaise</button>
+            <button class="resource-btn" onclick="selectResource('trade', this)" data-type="Vaisselle">Vaisselle</button>
+            <button class="resource-btn" onclick="selectResource('trade', this)" data-type="Tunique">Tunique</button>
+            <button class="resource-btn" onclick="selectResource('trade', this)" data-type="Vin">Vin</button>
+            <button class="resource-btn" onclick="selectResource('trade', this)" data-type="Sel">Sel</button>
+            <button class="resource-btn" onclick="selectResource('trade', this)" data-type="Epices">Epices</button>
+            <button class="resource-btn" onclick="selectResource('trade', this)" data-type="Soie">Soie</button>
+          </div>
         </div>
         <div class="trade-row">
           <label class="trade-label">Quantite :</label>

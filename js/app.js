@@ -669,6 +669,20 @@ async function removeCard(cardId) {
   await Promise.all([renderCards(), renderVillages()]);
 }
 
+// ---- RESOURCE BUTTON SELECTOR ----
+
+function selectResource(group, btn) {
+  const container = document.getElementById(group + '-type-btns');
+  container.querySelectorAll('.resource-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+function getSelectedResource(group) {
+  const container = document.getElementById(group + '-type-btns');
+  const active = container.querySelector('.resource-btn.active');
+  return active ? active.dataset.type : null;
+}
+
 // ---- INTERNAL TRANSFER ----
 
 async function populateInternalTransferVillages() {
@@ -759,10 +773,10 @@ async function showInternalStocks(selectId, containerId) {
 async function sendInternalTransfer() {
   const fromVillageId = parseInt(document.getElementById('internal-from-select').value);
   const toVillageId = parseInt(document.getElementById('internal-to-select').value);
-  const type = document.getElementById('internal-type-select').value;
+  const type = getSelectedResource('internal');
   const amount = parseInt(document.getElementById('internal-amount').value);
 
-  if (!fromVillageId || !toVillageId || !amount || amount <= 0) return;
+  if (!fromVillageId || !toVillageId || !type || !amount || amount <= 0) return;
 
   if (fromVillageId === toVillageId) {
     alert('Les villages source et destination doivent etre differents.');
@@ -850,10 +864,10 @@ async function sendInternalTransfer() {
 async function sendTrade() {
   const fromVillageId = parseInt(document.getElementById('trade-village-select').value);
   const toVillageId = parseInt(document.getElementById('trade-dest-village-select').value);
-  const type = document.getElementById('trade-type-select').value;
+  const type = getSelectedResource('trade');
   const amount = parseInt(document.getElementById('trade-amount').value);
 
-  if (!fromVillageId || !toVillageId || !amount || amount <= 0) return;
+  if (!fromVillageId || !toVillageId || !type || !amount || amount <= 0) return;
 
   const otherPlayer = players.find(p => p.id !== currentPlayerId);
   if (!otherPlayer) return;

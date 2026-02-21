@@ -525,6 +525,44 @@ body {
   border-color: var(--danger);
 }
 
+/* ---- RESOURCE BUTTONS ---- */
+
+.resource-btn-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.resource-btn {
+  padding: 5px 10px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 0.72rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.resource-btn:hover {
+  border-color: var(--border-light);
+  color: var(--text-primary);
+}
+
+.resource-btn.active {
+  background: var(--accent);
+  color: var(--bg-body);
+  border-color: var(--accent);
+  font-weight: 700;
+}
+
+.resource-btn.active:hover {
+  background: var(--accent-dim);
+  border-color: var(--accent-dim);
+}
+
 /* ---- TRADE SECTION ---- */
 
 .trade-form {
