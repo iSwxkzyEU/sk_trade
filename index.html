@@ -73,6 +73,52 @@
       </div>
     </div>
 
+    <!-- TRANSFERT INTERNE -->
+    <div class="section collapsible">
+      <div class="section-header" onclick="toggleSection(this)">
+        <h2>Transfert entre villages</h2>
+        <span class="collapse-icon">+</span>
+      </div>
+      <div class="section-body collapsed">
+        <div class="trade-form">
+          <div class="trade-row">
+            <label class="trade-label">Depuis :</label>
+            <select id="internal-from-select" onchange="onInternalFromChange()"></select>
+          </div>
+          <div id="internal-from-stocks" class="trade-dest-stocks"></div>
+          <div class="trade-row">
+            <label class="trade-label">Vers :</label>
+            <select id="internal-to-select" onchange="onInternalToChange()"></select>
+          </div>
+          <div id="internal-to-stocks" class="trade-dest-stocks"></div>
+          <div class="trade-row">
+            <label class="trade-label">Ressource :</label>
+            <select id="internal-type-select">
+              <option value="Gibier">Gibier</option>
+              <option value="Chaise">Chaise</option>
+              <option value="Vaisselle">Vaisselle</option>
+              <option value="Tunique">Tunique</option>
+              <option value="Vin">Vin</option>
+              <option value="Sel">Sel</option>
+              <option value="Epices">Epices</option>
+              <option value="Soie">Soie</option>
+            </select>
+          </div>
+          <div class="trade-row">
+            <label class="trade-label">Quantite :</label>
+            <div class="trade-slider-group">
+              <input type="range" id="internal-slider" class="trade-slider" min="0" max="2700" value="0"
+                oninput="document.getElementById('internal-amount').value = this.value; document.getElementById('internal-slider-value').textContent = this.value">
+              <input type="number" id="internal-amount" class="input-sm" value="0" min="0" max="2700"
+                oninput="document.getElementById('internal-slider').value = this.value; document.getElementById('internal-slider-value').textContent = this.value">
+              <span id="internal-slider-value" class="trade-slider-val">0</span>
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="sendInternalTransfer()">Transférer</button>
+        </div>
+      </div>
+    </div>
+
     <!-- TRADE -->
     <div class="section">
       <div class="section-header">

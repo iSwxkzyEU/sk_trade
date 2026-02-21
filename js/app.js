@@ -116,6 +116,7 @@ async function refreshDashboard(gen) {
     renderTradeHistory(),
     populateTradeVillages(),
     populateTradeDestVillages(),
+    populateInternalTransferVillages(),
     renderKPIs(g)
   ]);
 }
@@ -666,6 +667,180 @@ async function editCardTimer(cardId, currentExpires) {
 async function removeCard(cardId) {
   await db.from('cards').delete().eq('id', cardId);
   await Promise.all([renderCards(), renderVillages()]);
+}
+
+// ---- INTERNAL TRANSFER ----
+
+async function populateInternalTransferVillages() {
+  const { data: villages } = await db
+    .from('villages')
+    .select('*')
+    .eq('player_id', currentPlayerId)
+    .order('id');
+
+  const fromSelect = document.getElementById('internal-from-select');
+  const toSelect = document.getElementById('internal-to-select');
+  if (!fromSelect || !toSelect) return;
+
+  const prevFrom = fromSelect.value;
+  const prevTo = toSelect.value;
+
+  fromSelect.innerHTML = '';
+  toSelect.innerHTML = '';
+
+  if (villages) {
+    villages.forEach(v => {
+      const opt1 = document.createElement('option');
+      opt1.value = v.id;
+      opt1.textContent = v.name;
+      fromSelect.appendChild(opt1);
+
+      const opt2 = document.createElement('option');
+      opt2.value = v.id;
+      opt2.textContent = v.name;
+      toSelect.appendChild(opt2);
+    });
+
+    // Restaurer la selection ou mettre le 2e village en destination
+    if (prevFrom) fromSelect.value = prevFrom;
+    if (prevTo && prevTo !== fromSelect.value) {
+      toSelect.value = prevTo;
+    } else if (villages.length > 1) {
+      toSelect.value = villages[1].id;
+    }
+  }
+}
+
+function onInternalFromChange() {
+  showInternalStocks('internal-from-select', 'internal-from-stocks');
+}
+
+function onInternalToChange() {
+  showInternalStocks('internal-to-select', 'internal-to-stocks');
+}
+
+async function showInternalStocks(selectId, containerId) {
+  const container = document.getElementById(containerId);
+  const villageId = parseInt(document.getElementById(selectId).value);
+  if (!villageId) { container.innerHTML = ''; return; }
+
+  const player = players.find(p => p.id === currentPlayerId);
+  if (!player) return;
+
+  const [stockResult, prodResult] = await Promise.all([
+    db.from('stocks').select('*').eq('village_id', villageId),
+    db.from('production').select('*').eq('village_id', villageId)
+  ]);
+
+  const stocks = stockResult.data || [];
+  const prods = prodResult.data || [];
+
+  let html = '<div class="dest-stocks-grid">';
+  for (const type of BANQUET_TYPES) {
+    const stock = stocks.find(s => s.banquet_type === type);
+    const prod = prods.find(p => p.banquet_type === type);
+    const dailyAmount = prod ? prod.daily_amount : 0;
+    const multiplier = await getActiveMultiplier(currentPlayerId, type);
+    let current = 0;
+    if (stock) {
+      current = Math.min(calculateCurrentStock(stock, dailyAmount, multiplier), player.stock_capacity);
+    }
+    html += `<div class="dest-stock-item">
+      <span class="dest-stock-type">${type}</span>
+      <span class="dest-stock-val">${Math.floor(current)}</span>
+    </div>`;
+  }
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+async function sendInternalTransfer() {
+  const fromVillageId = parseInt(document.getElementById('internal-from-select').value);
+  const toVillageId = parseInt(document.getElementById('internal-to-select').value);
+  const type = document.getElementById('internal-type-select').value;
+  const amount = parseInt(document.getElementById('internal-amount').value);
+
+  if (!fromVillageId || !toVillageId || !amount || amount <= 0) return;
+
+  if (fromVillageId === toVillageId) {
+    alert('Les villages source et destination doivent etre differents.');
+    return;
+  }
+
+  const player = players.find(p => p.id === currentPlayerId);
+  if (!player) return;
+
+  localChangeInProgress = true;
+
+  // Calculer le stock actuel du village source
+  const { data: fromStock } = await db
+    .from('stocks')
+    .select('*')
+    .eq('village_id', fromVillageId)
+    .eq('banquet_type', type)
+    .single();
+
+  if (!fromStock) {
+    alert('Stock source introuvable.');
+    localChangeInProgress = false;
+    return;
+  }
+
+  const { data: fromProd } = await db
+    .from('production')
+    .select('daily_amount')
+    .eq('village_id', fromVillageId)
+    .eq('banquet_type', type)
+    .single();
+
+  const fromDaily = fromProd ? fromProd.daily_amount : 0;
+  const multiplier = await getActiveMultiplier(currentPlayerId, type);
+  const fromCurrent = Math.min(calculateCurrentStock(fromStock, fromDaily, multiplier), player.stock_capacity);
+
+  if (amount > fromCurrent) {
+    alert(`Stock insuffisant. Disponible : ${Math.floor(fromCurrent)}`);
+    localChangeInProgress = false;
+    return;
+  }
+
+  // Calculer le stock actuel du village destination
+  const { data: toStock } = await db
+    .from('stocks')
+    .select('*')
+    .eq('village_id', toVillageId)
+    .eq('banquet_type', type)
+    .single();
+
+  const { data: toProd } = await db
+    .from('production')
+    .select('daily_amount')
+    .eq('village_id', toVillageId)
+    .eq('banquet_type', type)
+    .single();
+
+  const toDaily = toProd ? toProd.daily_amount : 0;
+  let toCurrent = 0;
+  if (toStock) {
+    toCurrent = Math.min(calculateCurrentStock(toStock, toDaily, multiplier), player.stock_capacity);
+  }
+
+  // Appliquer le transfert
+  await Promise.all([
+    snapshotStock(fromVillageId, type, fromCurrent - amount),
+    snapshotStock(toVillageId, type, Math.min(toCurrent + amount, player.stock_capacity))
+  ]);
+
+  // Reset le formulaire
+  document.getElementById('internal-amount').value = '0';
+  document.getElementById('internal-slider').value = '0';
+  document.getElementById('internal-slider-value').textContent = '0';
+
+  // Refresh
+  await renderVillages();
+  showInternalStocks('internal-from-select', 'internal-from-stocks');
+  showInternalStocks('internal-to-select', 'internal-to-stocks');
+
+  setTimeout(() => { localChangeInProgress = false; }, 3000);
 }
 
 // ---- TRADE ----
