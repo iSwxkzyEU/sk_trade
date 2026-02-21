@@ -1207,12 +1207,13 @@ async function testDiscordWebhook() {
   }
 }
 
-async function sendDiscordAlert(playerName, villageName, banquetType, amount, capacity) {
+async function sendDiscordAlert(playerName, villageName, banquetType, amount, capacity, discordId) {
   if (!isDiscordEnabled()) return;
   const webhook = getDiscordWebhook();
   if (!webhook) return;
 
-  const message = `**Stock plein !** ${playerName} — ${villageName} — **${banquetType}** : ${amount} / ${capacity}`;
+  const mention = discordId ? `<@${discordId}> ` : '';
+  const message = `${mention}**Stock plein !** ${playerName} — ${villageName} — **${banquetType}** : ${amount} / ${capacity}`;
 
   try {
     await fetch(webhook, {
@@ -1238,7 +1239,7 @@ function checkStockAlerts(player) {
         // Trouver le nom du village
         const villageCard = document.querySelector(`.village-card[data-village-id="${cached.villageId}"]`);
         const villageName = villageCard ? villageCard.querySelector('h3').textContent : 'Village';
-        sendDiscordAlert(player.name, villageName, cached.banquetType, Math.floor(currentStock), player.stock_capacity);
+        sendDiscordAlert(player.name, villageName, cached.banquetType, Math.floor(currentStock), player.stock_capacity, player.discord_id);
       }
     } else if (currentStock < player.stock_capacity * 0.9) {
       // Reset la notif quand le stock redescend sous 90%
