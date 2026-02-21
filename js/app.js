@@ -1144,22 +1144,30 @@ function closeRecap(event) {
 
 // ---- DISCORD NOTIFICATIONS ----
 
+function isDiscordEnabled() {
+  return localStorage.getItem('discord_enabled') !== 'false';
+}
+
 function getDiscordWebhook() {
   return localStorage.getItem('discord_webhook') || DEFAULT_DISCORD_WEBHOOK;
 }
 
 function initDiscordUI() {
-  const webhook = getDiscordWebhook();
-  const status = document.getElementById('discord-status');
+  const enabled = isDiscordEnabled();
+  const btn = document.getElementById('discord-toggle-btn');
   const input = document.getElementById('discord-webhook-input');
-  if (webhook) {
-    status.textContent = 'actif';
-    status.className = 'discord-status discord-on';
-    if (input) input.value = webhook;
-  } else {
-    status.textContent = 'inactif';
-    status.className = 'discord-status discord-off';
+  if (btn) {
+    btn.textContent = enabled ? 'ON' : 'OFF';
+    btn.classList.toggle('discord-on', enabled);
+    btn.classList.toggle('discord-off', !enabled);
   }
+  if (input) input.value = getDiscordWebhook();
+}
+
+function toggleDiscordEnabled() {
+  const enabled = isDiscordEnabled();
+  localStorage.setItem('discord_enabled', enabled ? 'false' : 'true');
+  initDiscordUI();
 }
 
 function toggleDiscordConfig() {
@@ -1200,6 +1208,7 @@ async function testDiscordWebhook() {
 }
 
 async function sendDiscordAlert(playerName, villageName, banquetType, amount, capacity) {
+  if (!isDiscordEnabled()) return;
   const webhook = getDiscordWebhook();
   if (!webhook) return;
 

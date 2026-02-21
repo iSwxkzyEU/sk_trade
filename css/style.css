@@ -279,17 +279,28 @@ body {
   font-weight: 500;
 }
 
-.discord-status {
-  font-size: 0.72rem;
-  font-weight: 600;
+.discord-toggle {
+  padding: 4px 12px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  font-family: inherit;
+  font-size: 0.7rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  letter-spacing: 0.5px;
 }
 
-.discord-on {
-  color: var(--success);
+.discord-toggle.discord-on {
+  background: var(--success);
+  color: #fff;
+  border-color: var(--success);
 }
 
-.discord-off {
+.discord-toggle.discord-off {
+  background: transparent;
   color: var(--text-muted);
+  border-color: var(--border);
 }
 
 .discord-panel {
