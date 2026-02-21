@@ -261,6 +261,54 @@ body {
   font-size: 0.85rem;
 }
 
+/* ---- DISCORD CONFIG ---- */
+
+.discord-config {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.discord-config label {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+
+.discord-status {
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.discord-on {
+  color: var(--success);
+}
+
+.discord-off {
+  color: var(--text-muted);
+}
+
+.discord-panel {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  width: 100%;
+  margin-top: 6px;
+}
+
+.discord-panel.hidden {
+  display: none;
+}
+
+.discord-panel .input-md {
+  flex: 1;
+  font-size: 0.72rem;
+}
+
 /* ---- VILLAGE CARDS ---- */
 
 .village-card {

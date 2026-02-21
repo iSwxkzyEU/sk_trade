@@ -42,6 +42,16 @@
           <button class="btn btn-ghost btn-sm" onclick="updateCapacity()">Modifier</button>
         </div>
       </div>
+      <div class="discord-config">
+        <label>Discord :</label>
+        <span id="discord-status" class="discord-status"></span>
+        <button class="btn btn-ghost btn-sm" onclick="toggleDiscordConfig()">Config</button>
+        <div id="discord-config-panel" class="discord-panel hidden">
+          <input type="text" id="discord-webhook-input" class="input-md" placeholder="URL webhook Discord...">
+          <button class="btn btn-primary btn-sm" onclick="saveDiscordWebhook()">Sauver</button>
+          <button class="btn btn-ghost btn-sm" onclick="testDiscordWebhook()">Tester</button>
+        </div>
+      </div>
     </div>
 
     <!-- KPI -->

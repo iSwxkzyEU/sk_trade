@@ -8,6 +8,9 @@ let cachedData = {}; // Cache local : { villageId: { productions, stocks } }
 let stockTickInterval = null;
 let localChangeInProgress = false; // Bloque les refreshes realtime pendant une modif locale
 let switchGeneration = 0; // Compteur anti-race-condition pour les switchs d'onglet
+let notifiedStocks = new Set(); // Stocks deja notifies (evite le spam Discord)
+
+const DEFAULT_DISCORD_WEBHOOK = 'https://discord.com/api/webhooks/1474795025509384323/J85mCWMM28keYzDTVVGArO2eH3HVksdxNrqsKhIuHURGb5uvBp4MAGcGWtFuXvBAPYQL';
 
 // Calcule le temps restant avant pleine capacite et le formate
 function formatTimeToFull(currentStock, capacity, dailyAmount, multiplier) {
@@ -41,6 +44,7 @@ async function init() {
   renderPlayerTabs();
   switchPlayer(players[0].id);
   setupRealtimeSubscriptions();
+  initDiscordUI();
 
   // Migration en arriere-plan (une seule fois par session)
   if (!sessionStorage.getItem('banquet_rows_ok')) {
@@ -171,6 +175,9 @@ function tickStockDisplay() {
       rowEl.classList.toggle('near-cap', isNearCap);
     }
   });
+
+  // Verifier les alertes Discord
+  checkStockAlerts(player);
 }
 
 // ---- VILLAGES ----
@@ -1133,6 +1140,102 @@ async function showRecap() {
 function closeRecap(event) {
   if (event && event.target !== event.currentTarget) return;
   document.getElementById('recap-overlay').classList.remove('recap-visible');
+}
+
+// ---- DISCORD NOTIFICATIONS ----
+
+function getDiscordWebhook() {
+  return localStorage.getItem('discord_webhook') || DEFAULT_DISCORD_WEBHOOK;
+}
+
+function initDiscordUI() {
+  const webhook = getDiscordWebhook();
+  const status = document.getElementById('discord-status');
+  const input = document.getElementById('discord-webhook-input');
+  if (webhook) {
+    status.textContent = 'actif';
+    status.className = 'discord-status discord-on';
+    if (input) input.value = webhook;
+  } else {
+    status.textContent = 'inactif';
+    status.className = 'discord-status discord-off';
+  }
+}
+
+function toggleDiscordConfig() {
+  const panel = document.getElementById('discord-config-panel');
+  panel.classList.toggle('hidden');
+}
+
+function saveDiscordWebhook() {
+  const input = document.getElementById('discord-webhook-input');
+  const url = input.value.trim();
+  if (url) {
+    localStorage.setItem('discord_webhook', url);
+  } else {
+    localStorage.removeItem('discord_webhook');
+  }
+  initDiscordUI();
+  toggleDiscordConfig();
+}
+
+async function testDiscordWebhook() {
+  const webhook = getDiscordWebhook();
+  if (!webhook) { alert('Aucun webhook configure.'); return; }
+
+  try {
+    const resp = await fetch(webhook, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: 'Test Stronghold Tracker — les notifications fonctionnent !' })
+    });
+    if (resp.ok) {
+      alert('Message envoye !');
+    } else {
+      alert('Erreur Discord : ' + resp.status);
+    }
+  } catch (e) {
+    alert('Erreur : ' + e.message);
+  }
+}
+
+async function sendDiscordAlert(playerName, villageName, banquetType, amount, capacity) {
+  const webhook = getDiscordWebhook();
+  if (!webhook) return;
+
+  const message = `**Stock plein !** ${playerName} — ${villageName} — **${banquetType}** : ${amount} / ${capacity}`;
+
+  try {
+    await fetch(webhook, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: message })
+    });
+  } catch (e) {
+    // Silencieux en cas d'erreur reseau
+  }
+}
+
+function checkStockAlerts(player) {
+  for (const [key, cached] of Object.entries(cachedData)) {
+    const currentStock = Math.min(
+      calculateCurrentStock(cached.stock, cached.dailyAmount, cached.multiplier),
+      player.stock_capacity
+    );
+
+    if (currentStock >= player.stock_capacity && cached.dailyAmount > 0) {
+      if (!notifiedStocks.has(key)) {
+        notifiedStocks.add(key);
+        // Trouver le nom du village
+        const villageCard = document.querySelector(`.village-card[data-village-id="${cached.villageId}"]`);
+        const villageName = villageCard ? villageCard.querySelector('h3').textContent : 'Village';
+        sendDiscordAlert(player.name, villageName, cached.banquetType, Math.floor(currentStock), player.stock_capacity);
+      }
+    } else if (currentStock < player.stock_capacity * 0.9) {
+      // Reset la notif quand le stock redescend sous 90%
+      notifiedStocks.delete(key);
+    }
+  }
 }
 
 // ---- BEBOU ----
