@@ -385,7 +385,7 @@ body {
 
 .stock-eta {
   font-size: 0.65rem;
-  color: var(--text-muted);
+  color: var(--accent-dim);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   min-width: 38px;
