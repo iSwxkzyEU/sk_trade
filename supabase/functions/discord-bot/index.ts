@@ -270,16 +270,12 @@ Deno.serve(async (req: Request) => {
           const count = await clearChannel(channelId);
           return followUp(token, `${count} messages supprimés.`);
         }
-        if (cmd === "besoin") {
-          const player = await findPlayerByDiscord(discordId, discordName);
-          if (!player) {
-            return followUp(token, `Joueur non trouvé. Ton Discord ID: ${discordId} / Nom: ${discordName}\nDemande à l'admin de te lier.`);
-          }
-          const data = await getData(player.id);
-          return followUp(token, cmdBesoin(data));
+        const player = await findPlayerByDiscord(discordId, discordName);
+        if (!player) {
+          return followUp(token, `Joueur non trouvé. Ton Discord ID: ${discordId} / Nom: ${discordName}\nDemande à l'admin de te lier.`);
         }
-        const data = await getData();
-        const content = cmd === "stock" ? cmdStock(data) : cmd === "temps" ? cmdTemps(data) : "Commande inconnue.";
+        const data = await getData(player.id);
+        const content = cmd === "stock" ? cmdStock(data) : cmd === "temps" ? cmdTemps(data) : cmd === "besoin" ? cmdBesoin(data) : "Commande inconnue.";
         return followUp(token, content);
       } catch (e) {
         return followUp(token, "Erreur: " + (e as Error).message);
