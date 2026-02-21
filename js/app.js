@@ -9,6 +9,7 @@ let stockTickInterval = null;
 let localChangeInProgress = false; // Bloque les refreshes realtime pendant une modif locale
 let switchGeneration = 0; // Compteur anti-race-condition pour les switchs d'onglet
 let notifiedStocks = new Set(); // Stocks deja notifies (evite le spam Discord)
+let notifiedCards = new Set(); // Cartes deja notifiees (expiration proche)
 
 const DEFAULT_DISCORD_WEBHOOK = 'https://discord.com/api/webhooks/1474795025509384323/J85mCWMM28keYzDTVVGArO2eH3HVksdxNrqsKhIuHURGb5uvBp4MAGcGWtFuXvBAPYQL';
 
@@ -178,6 +179,7 @@ function tickStockDisplay() {
 
   // Verifier les alertes Discord
   checkStockAlerts(player);
+  checkCardAlerts();
 }
 
 // ---- VILLAGES ----
@@ -1244,6 +1246,33 @@ function checkStockAlerts(player) {
     } else if (currentStock < player.stock_capacity * 0.9) {
       // Reset la notif quand le stock redescend sous 90%
       notifiedStocks.delete(key);
+    }
+  }
+}
+
+async function checkCardAlerts() {
+  if (!isDiscordEnabled()) return;
+  for (const p of players) {
+    const cards = await getActiveCards(p.id);
+    for (const card of cards) {
+      const remaining = new Date(card.expires_at) - Date.now();
+      const key = `card-${card.id}`;
+      if (remaining > 0 && remaining <= 10 * 60 * 1000) {
+        if (!notifiedCards.has(key)) {
+          notifiedCards.add(key);
+          const mins = Math.ceil(remaining / 60000);
+          const webhook = getDiscordWebhook();
+          if (!webhook) continue;
+          const mention = p.discord_id ? `<@${p.discord_id}> ` : '';
+          try {
+            await fetch(webhook, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ content: `${mention}**Carte bientot expiree !** ${card.banquet_type} x${card.multiplier} — ${mins} min restantes` })
+            });
+          } catch (e) {}
+        }
+      }
     }
   }
 }
